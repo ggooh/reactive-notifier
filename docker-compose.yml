@@ -1,4 +1,4 @@
-version : '3.8'
+version: '3.8'
 
 services:
   rabbitmq:
@@ -9,6 +9,16 @@ services:
       - "15672:15672"
     networks:
       - notifier_network
+
+  api:
+    build: ./api
+    container_name: fastapi_producer
+    ports:
+      - "8000:8000"
+    networks:
+      - notifier_network
+    depends_on:
+      - rabbitmq
 
 networks:
   notifier_network:
