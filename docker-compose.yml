@@ -20,6 +20,15 @@ services:
     depends_on:
       - rabbitmq
 
+  worker:
+    build: ./worker
+    container_name: python_worker
+    networks:
+      - notifier_network
+    depends_on:
+      - rabbitmq
+    restart: always
+
 networks:
   notifier_network:
     driver: bridge
