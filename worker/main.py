@@ -2,17 +2,19 @@ import pika
 import time
 import json
 import smtplib
+import os
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-def send_html_email(target_email, customer_name, order_id, amount):
-    # 1. Setup SMTP connection parameters 
-    smtp_server = "mailpit"
-    smtp_port = 1025
+RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
+SMTP_SERVER = os.getenv("SMTP_SERVER", "localhost")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 1025))
+SENDER_EMAIL = os.getenv("SENDER_EMAIL", "no-reply@example.com")
 
+def send_html_email(target_email, customer_name, order_id, amount):
     msg = MIMEMultipart('alternative')
     msg['Subject'] = f"Order Confirmation #{order_id}"
-    msg['From'] = "store@reactive-notifier.com"
+    msg['From'] = SENDER_EMAIL
     msg['To'] = target_email
      
     # 2. Read the external HTML template file
@@ -31,7 +33,7 @@ def send_html_email(target_email, customer_name, order_id, amount):
 
     msg.attach(MIMEText(final_html, 'html'))
 
-    with smtplib.SMTP(smtp_server, smtp_port) as server:
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
         server.sendmail(msg['From'], [msg['To']], msg.as_string())    
                         
 
@@ -74,7 +76,7 @@ def start_worker():
         try:
             print(f" [*] Attempting to connect to RabbitMQ (Attempt {attempt + 1}/{max_retries})...")
             connection = pika.BlockingConnection(
-                pika.ConnectionParameters(host='rabbitmq_broker')
+                pika.ConnectionParameters(host=RABBITMQ_HOST)
             )
             break 
         except pika.exceptions.AMQPConnectionError:
@@ -92,16 +94,9 @@ def start_worker():
     # Declare the Dead Letter Queue to store failed messages
     channel.queue_declare(queue='dlq_queue', durable=True)
 
-    channel.queue_bind(
-        exchange='dlx_exchange',
-        queue='dlq_queue',
-        routing_key='dead_letter_key'
-    )
+    channel.queue_bind(exchange='dlx_exchange', queue='dlq_queue', routing_key='dead_letter_key')
 
-    main_queue_arguments = {
-        'x-dead-letter-exchange': 'dlx_exchange',
-        'x-dead-letter-routing-key': 'dead_letter_key'
-    }
+    main_queue_arguments = {'x-dead-letter-exchange': 'dlx_exchange', 'x-dead-letter-routing-key': 'dead_letter_key'}
 
     channel.queue_declare(queue='notification_queue', durable=True, arguments=main_queue_arguments)
 

@@ -19,9 +19,15 @@ services:
   worker:
     build: ./worker
     container_name: python_worker
+    volumes:
+      - ./worker:/app
+    environment:
+      - RABBITMQ_HOST=${RABBITMQ_HOST}
+      - SMTP_SERVER=${SMTP_SERVER}
+      - SMTP_PORT=${SMTP_PORT}
+      - SENDER_EMAIL=${SENDER_EMAIL}
     depends_on:
       - rabbitmq
-      - mailpit
     restart: always
   
   mailpit:

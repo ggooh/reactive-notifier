@@ -9,3 +9,5 @@ venv/
 
 # Docker volumes and temp files
 .docker/
+
+.env
