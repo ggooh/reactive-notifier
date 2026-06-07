@@ -21,7 +21,7 @@ def send_html_email(target_email, customer_name, order_id, amount):
             html_content = file.read()
     except FileNotFoundError:
         print(" [!] Error: email_template.html file missing!")
-        return
+        raise
     
     final_html = html_content.format(
         customer_name=customer_name,
@@ -36,28 +36,35 @@ def send_html_email(target_email, customer_name, order_id, amount):
                         
 
 def process_notifications(ch, method, properties, body):
-    # 1. Unwrap the JSON package from RabbitMQ into Python dictionary
-    order_data = json.loads(body)
-
-   # 2. Extract the specific labels from the package
-    target_email = order_data.get("email")
-    customer = order_data.get("customer_name")
-    order_id = order_data.get("order_id")
-    amount = order_data.get("amount")
-
-    print(f" [x] Processing order #{order_id} for {customer}")
-
+    # 1. Decode and analyze the incoming message body
     try:
+
+        order_data = json.loads(body)
+        target_email = order_data.get("email")
+        customer = order_data.get("customer_name")
+        order_id = order_data.get("order_id")
+        amount = order_data.get("amount")
+
+        print(f" [x] Processing order #{order_id} for {customer}")
+    
+        # 2. If the payload lacks a valid email, considered it a corrupted message.
+        if not target_email:
+            raise ValueError("Invalid payload: 'email' field is missing or empty")
+
         send_html_email(target_email, customer, order_id, amount)
         print(f" [x] Email successfully sent to {target_email}")
-    except Exception as e:
-        print(f" [!] Failed to send email: {str(e)}")
 
+        # 3. Tell RabbitMQ to remove it when done   
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+
+    except Exception as error:
+        print(f" [!] CRITICAL ERROR during processing: {str(error)}")
+        print(" [!] Rejecting message and routing to Dead Letter Queue (DLQ)...")
+
+        # 4. Tell RabbitMQ to route it to the Dead Letter Exchange.
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+    
     print("-" * 40)
-
-    # 3. Tell RabbitMQ to remove it when done   
-    ch.basic_ack(delivery_tag=method.delivery_tag)
-
 
 
 def start_worker():
@@ -79,7 +86,24 @@ def start_worker():
     
     channel = connection.channel()
 
-    channel.queue_declare(queue='notification_queue', durable=True)
+    # Declare the Dead Letter Exchange 
+    channel.exchange_declare(exchange='dlx_exchange', exchange_type='direct')
+
+    # Declare the Dead Letter Queue to store failed messages
+    channel.queue_declare(queue='dlq_queue', durable=True)
+
+    channel.queue_bind(
+        exchange='dlx_exchange',
+        queue='dlq_queue',
+        routing_key='dead_letter_key'
+    )
+
+    main_queue_arguments = {
+        'x-dead-letter-exchange': 'dlx_exchange',
+        'x-dead-letter-routing-key': 'dead_letter_key'
+    }
+
+    channel.queue_declare(queue='notification_queue', durable=True, arguments=main_queue_arguments)
 
     channel.basic_qos(prefetch_count=1)
 
