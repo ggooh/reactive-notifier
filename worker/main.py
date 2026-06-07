@@ -40,19 +40,36 @@ def send_html_email(target_email, customer_name, order_id, amount):
 def process_notifications(ch, method, properties, body):
     # 1. Decode and analyze the incoming message body
     try:
-
+        
         order_data = json.loads(body)
         target_email = order_data.get("email")
         customer = order_data.get("customer_name")
         order_id = order_data.get("order_id")
         amount = order_data.get("amount")
 
-        print(f" [x] Processing order #{order_id} for {customer}")
-    
-        # 2. If the payload lacks a valid email, considered it a corrupted message.
-        if not target_email:
-            raise ValueError("Invalid payload: 'email' field is missing or empty")
+        print(f" [x] Receiving payload for processing...")
 
+        # Payload validation gateway
+        if not target_email or "@" not in target_email:
+            raise ValueError(f"Validation Failed: Missing or malformed email ('{target_email}').")
+
+        if not order_id or str(order_id).strip().lower() == "none":
+            raise ValueError("Validation Failed: 'order_id' is missing or invalid.")
+        
+        if amount is None:
+            raise ValueError("Validation Failed: 'amount' field is strictly required.")
+        
+        try:
+            if float(amount) <= 0:
+                raise ValueError("Validation Failed: 'amount' must be greater than zero.")
+        except TypeError:
+            raise ValueError(f"Validation Failed: 'amount' must be a valid number, received '{type(amount).__name__}'.")
+    
+        if not customer or str(customer).strip().lower() == "none":
+            print(" [!] Warning: 'customer_name' missing. Falling back to default greeting.")
+            customer = "Valued Customer"
+
+        print(f" [x] Payload verified. Processing order #{order_id} for {customer}")
         send_html_email(target_email, customer, order_id, amount)
         print(f" [x] Email successfully sent to {target_email}")
 
