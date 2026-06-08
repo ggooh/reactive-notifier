@@ -48,12 +48,12 @@ Make sure you have **Docker** and **Docker Compose** installed on your system (o
 
 ### 1. Setup Environment Variables
 Create a `.env` file in the root directory of the project:
-
+```ini
 RABBITMQ_HOST=rabbitmq_broker
 SMTP_SERVER=mailpit
 SMTP_PORT=1025
 SENDER_EMAIL=store@reactive-notifier.com
-
+```
 
 ### 2. Boot Up Infrastructure with Scaled Workers
 To spin up the entire ecosystem with 3 parallel workers running simultaneously to divide workloads, run:
